@@ -1,3 +1,24 @@
+;; Copyright (c) 2010-2012 John H. Poplett.
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining
+;; a copy of this software and associated documentation files (the
+;; "Software"), to deal in the Software without restriction, including
+;; without limitation the rights to use, copy, modify, merge, publish,
+;; distribute, sublicense, and/or sell copies of the Software, and to
+;; permit persons to whom the Software is furnished to do so, subject to
+;; the following conditions:
+
+;; The above copyright notice and this permission notice shall be
+;; included in all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+;; NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+;; LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+;; OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+;; WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+;;
 (ns figleaf.core
   (:use [clojure.set :only [difference]])
   (:require [clojure.test :as test]))
@@ -5,6 +26,8 @@
 (defn foo [x] (* x x))
 
 (defn standard-fn? [func]
+  "Evaluate func to decide if it represents a standard function, i.e. not
+a macro and not itself a test method."
   (and (.isBound func) (fn? (deref func))
            (not (:macro (meta func))) (not (:test (meta func)))))
 
@@ -31,16 +54,35 @@ expression to restore to original."
   "Wrap each function of the given package with pre and post function
 calls. Call code specified in the body and restore the functions on exit."
   `(loop [symbols# (vals (ns-publics '~ns)) restore-list# nil]
-     (if (nil? (first symbols#))
-       (let [result# ~@body]
-         (doseq [restore-fn# restore-list#]
-           (restore-fn#))
-         result#)
-       (let [func# (first symbols#)]
-         (if (and (.isBound func#) (fn? (deref func#))
-                  (not (:macro (meta func#))) (not (:test (meta func#))))
-           (recur (rest symbols#) (cons (do-instrument-function func# ~pre ~post) restore-list#))
-           (recur (rest symbols#) restore-list#))))))
+    (if (nil? (first symbols#))
+      (let [result# ~@body]
+        (doseq [restore-fn# restore-list#]
+          (restore-fn#))
+        result#)
+      (let [func# (first symbols#)]
+        (if (and (.isBound func#) (fn? (deref func#))
+                 (not (:macro (meta func#))) (not (:test (meta func#))))
+          (recur (rest symbols#) (cons (do-instrument-function func# ~pre ~post) restore-list#))
+          (recur (rest symbols#) restore-list#))))))
+
+
+(defn instrument-namespace [namespace-under-test pre post]
+  (map #(do-instrument-function %1 pre post) (filter standard-fn? (vals (ns-publics namespace-under-test)))))
+
+;;
+;; High-order function version of with-instrument-namespace. Gets illegal recur in try block
+;; runtime exception if we try to wrap the evaluation of "body" in a try form.
+;;
+;; Needs debugging still. Seems to instrument but doesn't execute wrapper code.
+;;
+(defmacro with-instrument-namespace-not-yet [ns pre post & body]
+  "Wrap each function of the given package with pre and post function
+calls. Call code specified in the body and restore the functions on exit."
+  `(let [restore-list# (instrument-namespace '~ns ~pre ~post)
+         result# ~@body]
+     (doseq [restore-fn# restore-list#]
+       (restore-fn#))
+     result#))
 
 (let [funcall-counter (atom {})
       target-ns (atom 'user)]
@@ -74,6 +116,9 @@ calls. Call code specified in the body and restore the functions on exit."
   (defn set-namespace [namespace-under-test]
     (swap! target-ns (fn [_] namespace-under-test)))
   (defmacro run-tests [namespace-under-test unit-test-namespace]
+    "Instrument namespace-under-test and execute the unit tests in
+unit-test-namespace. Code coverage results are appended to the output
+of the standard test results."
     `(do
       (set-namespace '~namespace-under-test)
       (reset-function-count)
