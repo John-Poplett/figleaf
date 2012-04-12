@@ -1,0 +1,17 @@
+#+TITLE: Figleaf TODO
+#+AUTHOR: John Poplett
+
+* TODO Blacklist
+Extend APIs and implement a way for calling code to exempt certain
+functions from instrumentation.
+* TODO Self-analysis
+Eliminate infinite recursion in figleaf.core so figleaf can instrument
+and report code coverage stats for its own unit tests. May not be
+readily feasible or worthwhile.
+* TODO Binding
+Examine the use of binding as an alternative to alt-var-root for the
+=with-instrument-namespace= macro.
+* TODO Figleaf Leiningen plugin
++ Improve integration with Leiningen so the plugin instruments a
+  complete project in one fell swoop.
++ Add option to emit a list of untested functions

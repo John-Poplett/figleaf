@@ -1,0 +1,72 @@
+#+TITLE: FIGLEAF
+#+AUTHOR: John Poplett
+#+EMAIL: john.poplett@acm.org
+
+* Introduction
+figleaf is a minimalist code coverage utility for Clojure, layered on
+top of the [[http://richhickey.github.com/clojure/clojure.test-api.html][clojure.test]] unit test framework. It's based on cl-figleaf,
+a similar implementation for Common Lisp. figleaf is pretty basic and
+only analyzes function coverage. It doesn't analyze coverage by
+statement or condition / decision logic. Despite its limitations, it's
+still quite useful and easy to use.
+
+It can help you identify functions or macros that aren't tested.
+Conversely, untested functions sometimes indicate functions that are
+out-dated and safe to remove.
+
+Figleaf instruments a namespace so that it can count the number of times
+the macros and functions of that namespace are called. When unit tests
+are executed, the function calls are recorded. At the end of the unit
+test run, the counts are reported to the console.
+
+Figleaf is conveniently invoked from a Clojure REPL or as a Leiningen task.
+
+From the REPL, one can invoke the =run-tests= function:
+
+=user> (run-tests unitstat unitstat.tests)=
+
+=run-tests= will execute the tests defined in the namespace
+=unit-test-namespace= on an instrumented version of
+=namespace-under-test=. At the end of the run, the results are printed
+to standard output.
+
+By design, these look like they are part of a standard clojure.test
+summary.
+
+#+CAPTION: Sample Run of Figleaf
+[[./img/figleaf-sample-run.png]]
+
+Another useful function is =figleaf:untested= which returns a list
+of functions that were not called by any unit test. The complementary
+function is =tested= which will return all of the functions that were
+called.
+
+#+CAPTION: Sample Output from =untested= function
+[[./img/figleaf-untested-output.png]]
+
+* Future
+Figleaf has been qualified with Clojure 1.3 and the clojure.test test
+framework. In the future, it might be extended to provide function
+profiling and other useful features.
+
+* Copyright
+Copyright (c) 2010-2011 John H. Poplett.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

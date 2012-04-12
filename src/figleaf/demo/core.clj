@@ -27,3 +27,6 @@
 
 (defn add-one [number]
   (inc number))
+
+(defn bad-bad-foo []
+  (throw "I quit!"))

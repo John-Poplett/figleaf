@@ -1,8 +1,13 @@
-/pom.xml
+*pom.xml
 *jar
+*.*~
 /lib
 /classes
 /native
-/.lein-failures
+*.lein-failures
 /checkouts
-/.lein-deps-sum
+*.lein-deps-sum
+/ui
+Instrumenting Clojure Code.org
+Presentation.pdf
+Presentation.tex

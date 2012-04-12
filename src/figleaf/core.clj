@@ -23,66 +23,57 @@
   (:use [clojure.set :only [difference]])
   (:require [clojure.test :as test]))
 
-(defn foo [x] (* x x))
-
 (defn standard-fn? [func]
   "Evaluate func to decide if it represents a standard function, i.e. not
 a macro and not itself a test method."
   (and (.isBound func) (fn? (deref func))
-           (not (:macro (meta func))) (not (:test (meta func)))))
+       (not (:macro (meta func))) (not (:test (meta func)))))
 
-(defn do-instrument-function [var-name pre post]
+(defn instrumented? [func]
+  (not (nil? (:figleaf/original (meta func)))))
+
+(defn instrument-function [var-name pre post]
   "Wrap given func with pre- and post-function calls. Return a let-over-lambda
 expression to restore to original."
   (do
     (alter-var-root var-name
-                    (fn [function]
-                      (with-meta
-                        (fn [& args]
-                          (if pre (pre (str var-name) args))
-                          (let [result (apply function args)]
-                            (if post (post (str var-name) args))
-                            result))
-                        (assoc (meta function)
-                          :figleaf/original function))))
+		    (fn [function]
+		      (with-meta
+			(fn [& args]
+			  (if pre (pre (str var-name) args))
+			  (let [result (apply function args)]
+			    (if post (post (str var-name) args))
+			    result))
+			(assoc (meta function)
+			  :figleaf/original function))))
     #(alter-var-root var-name (fn [function] (:figleaf/original (meta function))))))
 
-(defmacro instrument-function [function pre post]
-  `(do-instrument-function (var ~function) ~pre ~post))
+(defn instrument-namespace [namespace-under-test pre post]
+  "Instrument a namespace. Wrap in docall is necessary to make sure call methods are instrumented
+ahead of use."
+  (doall (map #(instrument-function %1 pre post) (filter standard-fn? (vals (ns-publics namespace-under-test))))))
+
+;;
+;; High-order function version of with-instrument-namespace.
+;;
+;; To avoid a compile time error in Clojure, a restore lambda function is
+;; defined and called from the finally block; otherwise, Clojure complains
+;; about recursion in the finally block.
+;;
+(defn with-instrument-namespace-fn [ns pre post body]
+  "Wrap each function of the given package with pre and post function
+calls. Call code specified in the body and restore the functions on exit.
+Use try-finally block to guarantee recovery even when an exception occurs."
+  (let [restore-list (instrument-namespace ns pre post)
+	restore #(doseq [restore-fn restore-list]
+		   (restore-fn))]
+    (try (body)
+	 (finally (restore)))))
 
 (defmacro with-instrument-namespace [ns pre post & body]
   "Wrap each function of the given package with pre and post function
 calls. Call code specified in the body and restore the functions on exit."
-  `(loop [symbols# (vals (ns-publics '~ns)) restore-list# nil]
-    (if (nil? (first symbols#))
-      (let [result# ~@body]
-        (doseq [restore-fn# restore-list#]
-          (restore-fn#))
-        result#)
-      (let [func# (first symbols#)]
-        (if (and (.isBound func#) (fn? (deref func#))
-                 (not (:macro (meta func#))) (not (:test (meta func#))))
-          (recur (rest symbols#) (cons (do-instrument-function func# ~pre ~post) restore-list#))
-          (recur (rest symbols#) restore-list#))))))
-
-
-(defn instrument-namespace [namespace-under-test pre post]
-  (map #(do-instrument-function %1 pre post) (filter standard-fn? (vals (ns-publics namespace-under-test)))))
-
-;;
-;; High-order function version of with-instrument-namespace. Gets illegal recur in try block
-;; runtime exception if we try to wrap the evaluation of "body" in a try form.
-;;
-;; Needs debugging still. Seems to instrument but doesn't execute wrapper code.
-;;
-(defmacro with-instrument-namespace-not-yet [ns pre post & body]
-  "Wrap each function of the given package with pre and post function
-calls. Call code specified in the body and restore the functions on exit."
-  `(let [restore-list# (instrument-namespace '~ns ~pre ~post)
-         result# ~@body]
-     (doseq [restore-fn# restore-list#]
-       (restore-fn#))
-     result#))
+  `(with-instrument-namespace-fn '~ns ~pre ~post (fn [] ~@body)))
 
 (let [funcall-counter (atom {})
       target-ns (atom 'user)]
@@ -123,7 +114,7 @@ of the standard test results."
       (set-namespace '~namespace-under-test)
       (reset-function-count)
       (with-instrument-namespace ~namespace-under-test increment-funcall-count nil
-        (test/run-tests '~unit-test-namespace))
+	(test/run-tests '~unit-test-namespace))
       (printf "CODE COVERAGE: Functions %d, Tested %d, Ratio %2.0f%%\n" (namespace-function-count)
-              (tested-function-count) (/ (funcall-count) (namespace-function-count) 0.01))))
+	      (tested-function-count) (/ (tested-function-count) (namespace-function-count) 0.01))))
   )
