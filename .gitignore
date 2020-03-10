@@ -1,13 +1,24 @@
 *pom.xml
+.cpcache/
 *jar
 *.*~
 /lib
+/target
 /classes
 /native
 *.lein-failures
 /checkouts
 *.lein-deps-sum
 /ui
-Instrumenting Clojure Code.org
+.idea/*
+figleaf.iml
 Presentation.pdf
 Presentation.tex
+Presentation.aux
+Presentation.log
+Presentation.nav
+Presentation.out
+Presentation.snm
+Presentation.synctex.gz
+Presentation.toc
+Presentation.vrb

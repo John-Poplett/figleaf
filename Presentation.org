@@ -8,8 +8,8 @@
 
 * Introduction
 ** Abstract
-This article is about instrumenting Clojure code, that is how one goes
-about modifying an existing code base to monitor or evaluate its
+This presentation is about instrumenting Clojure code, that is how one
+goes about modifying an existing code base to monitor or evaluate its
 performance or behavior.
 
 It looks at =alter-var-root=, a function of the Clojure runtime library
@@ -22,21 +22,6 @@ facility.
 In computer programming [[http://en.wikipedia.org/wiki/Instrumentation_(computer_programming)][instrumentation]] is the activity of modifying
 an existing code base to monitor or evaluate its performance or
 behavior.
-
-** Wikipedia Definition
-A more long-winded description is provided on Wikipedia and is
-repeated here for comparison:
-
-#+BEGIN_QUOTE
-In context of computer programming, instrumentation refers to an
-ability to monitor or measure the level of a product's performance, to
-diagnose errors and to write trace information. Programmers implement
-instrumentation in the form of code instructions that monitor specific
-components in a system.
-
-Instrumentation approaches can be of two types, source instrumentation
-and binary instrumentation.
-#+END_QUOTE
 
 ** Use cases
 Some of the use cases for instrumentation include:
@@ -52,33 +37,16 @@ though. For example, a probe might be placed on a withdraw payment
 function in a banking application to observe and record unusually
 large withdrawals.
 ** Static Instrumentation
-In static languages like C or C++, instrumentation typically occurs at
-compile time either by rewriting the source code with an
-instrumentation tool to inject instrumentation into the original
-source or with special support built into the compiler. The commercial
-tool Bullseye provides an example of the former type of
-instrumentation. Gcov, from the GNU compiler collection, provides an
-example of the latter.
-
-As the name implies, static instrumentation requires creating a
-special-purpose build of the code. It cannot be added or removed from
-the code at runtime. To undo the instrumentation, you have to rebuild
-the code.
-
++ Instrument at compile time
++ Requires special builds
++ Requires semantic knowledge of the language (parser technology)
 ** Dynamic Instrumentation
-Dynamic instrumentation involves modifying the runtime image of a
-program. In Java, this can be done by rewriting byte codes at class
-load time.
-
-The advantage of Clojure and other dynamic languages where functions
-are first class objects make it easy to obtain the body of a function,
-wrap it with another function and rebind the var that references the
-function to the wrapped version.
-
-Dynamic languages have the advantage that the instrumentation can
-happen on live images. It is possible to instrument code and remove
-instrumentation on a live system image.
-
++ Instrument at run-time or class-load time
++ Special build not required
++ Instrument live images
++ Remove instrumentation from live images
++ Instrumentation simple for Clojure and other languages where
+  functions are first-class objects
 ** Instrumentation from the REPL
 #+BEGIN_SRC bash
 john-popletts-computer:figleaf john$ lein repl
@@ -90,10 +58,10 @@ user=> (baz 8)
 user=> baz
 #<user$baz user$baz@1d417690>
 user=> (def baz
-         (let [oldfn baz]
-           (fn [n] (do
-                     (println "Hello baz!")
-                     (oldfn n)))))
+	 (let [oldfn baz]
+	   (fn [n] (do
+		     (println "Hello baz!")
+		     (oldfn n)))))
 #'user/baz
 user=> (baz 8)
 Hello baz!
@@ -120,10 +88,10 @@ using =alter-var-root=:
 user=> (sqr 5)
 25
 user=> (alter-var-root
-         (var sqr)                     ; var to alter
-         (fn [f]                       ; fn to apply to the var's value
-           #(do (println "Squaring" %) ; returns a new fn wrapping old fn
-                (f %))))
+	 (var sqr)                     ; var to alter
+	 (fn [f]                       ; fn to apply to the var's value
+	   #(do (println "Squaring" %) ; returns a new fn wrapping old fn
+		(f %))))
 user=> (sqr 5)
 Squaring 5
 25
@@ -131,17 +99,9 @@ Squaring 5
 
 * Figleaf
 ** Background
-Figleaf is a minimalist code-coverage library or, in other words,
-just enough code code coverage to cover your private parts.
-
-The code-coverage library is layered on top of an instrumentation
-library. The instrumentation library can be used independently of the
-code-coverage library.
-
-Figleaf was originally written for Common Lisp and released as
-cl-figleaf. The Clojure port largely remains true to the original
-Common Lisp implementation.
-
++ Instrumentation library
++ Minimalist code-coverage library layered on top
++ Derived from cl-figleaf, its Common Lisp predecessor
 ** Some Requirements
  With =alt-var-root= we have the rudimentary support we
 require to develop an instrumentation package. What are some candidate
@@ -156,34 +116,25 @@ requirements?
   (do
     (alter-var-root var-name
       (fn [function]
-        (with-meta
-          (fn [& args]
-            (if pre (pre (str var-name) args))
-            (let [result (apply function args)]
-              (if post (post (str var-name) args))
-              result))
-          (assoc (meta function)
-            :figleaf/original function))))
+	(with-meta
+	  (fn [& args]
+	    (if pre (pre (str var-name) args))
+	    (let [result (apply function args)]
+	      (if post (post (str var-name) args))
+	      result))
+	  (assoc (meta function)
+	    :figleaf/original function))))
     #(alter-var-root var-name (fn [function] (:figleaf/original (meta function))))))
 #+END_SRC
 ** Wrapper Macros
-An idiom that Clojure shares with Common Lisp is the wrapper macro
-idiom; wrapper macros usually begin with a =with-something=
-prefix. They are commonly used to acquire a resource or set a
-condition, execute a form and then release the acquired resource or
-restore the condition.
-
-Sometimes they are used to temporarily rebind a global var. Common
-Lisp has the =with-open-file= and =with-open-stream= macros and
-Clojure has the =with-open= and =with-out-str= macros.
-
-** Wrapper Macros (cont.)
-Wrapper macros try to guarantee to "put everything back". In Common
-Lisp, a form is wrapped within the =unwind-protect= form to make this
-guarantee.  In Clojure, the same purpose is realized with a
-=try/finally= block (see the section "Wrapping Macros" in the Macros
-chapter of Programming Clojure for more on this topic).
-
++ Commonly begin with a =with-= prefix (e.g. CL's =with-open-file= or
+  Clojure's =with-open=)
++ Acquire a resource, set a condition or bind a var
++ Execute a form
++ Restore resource, original condition or value of a var
++ Guarantee restore even when bad things happen with =unwind-protect=
+  (CL) or =try/finally= (Clojure)
++ See section on Wrapper Macro's in Programming Clojure for more
 ** Figleaf's =with-instrument-namespace=
 Figleaf implements =with-instrument-namespace=, a macro that takes a
 namespace and optional methods that are invoked before and after
@@ -193,7 +144,7 @@ functions in the library.
 with-instrument-namespace [ns pre post body]
 #+END_SRC
 
-In the tradition of "=with-=" macros, it instruments each public
+In the tradition of =with-= macros, it instruments each public
 function in the namespace with the pre and post functions, executes
 the forms reprsented by "body" and then removes the instrumentation
 before returning.
@@ -209,17 +160,17 @@ ahead of use."
     (map
       #(instrument-function %1 pre post)
        (filter standard-fn?
-         (vals
-           (ns-publics namespace-under-test))))))
+	 (vals
+	    (ns-publics namespace-under-test))))))
 #+END_SRC
 ** Putting everything back
 #+BEGIN_SRC cl
 (defn with-instrument-namespace-fn [ns pre post body]
   (let [restore-list (instrument-namespace ns pre post)
-        restore #(doseq [restore-fn restore-list]
-                   (restore-fn))]
+	restore #(doseq [restore-fn restore-list]
+		   (restore-fn))]
     (try (body)
-         (finally (restore)))))
+	 (finally (restore)))))
 #+END_SRC
 ** The =with-instrument-namespace= macro
 #+BEGIN_SRC cl
@@ -243,9 +194,9 @@ run-tests [namespace-under-test unit-test-namespace]
   (defmacro run-tests [namespace-under-test unit-test-namespace]
     `(do
       (with-instrument-namespace ~namespace-under-test increment-funcall-count nil
-        (test/run-tests '~unit-test-namespace))
+	(test/run-tests '~unit-test-namespace))
       (printf "CODE COVERAGE: Functions %d, Tested %d, Ratio %2.0f%%\n" (namespace-function-count)
-              (tested-function-count) (/ (tested-function-count) (namespace-function-count) 0.01))))
+	      (tested-function-count) (/ (tested-function-count) (namespace-function-count) 0.01))))
 #+END_SRC
 
 ** The Figleaf Leiningen task
@@ -277,7 +228,7 @@ CODE COVERAGE: Functions 27, Tested 23, Ratio 85%
 The source code for Figleaf is located on Github:
 https://github.com/John-Poplett/figleaf.
 
-+ =[[http://clojuredocs.org/clojure_core/clojure.core/alter-var-root][alt-var-root]]=, Clojure docs on =alt-var-root=
++ [[http://clojuredocs.org/clojure_core/clojure.core/alter-var-root][alt-var-root]], Clojure docs on =alt-var-root=
 + [[https://github.com/John-Poplett/figleaf][figleaf]], the figleaf library
 + [[https://github.com/Seajure/radagast][Radagast]], Phil Hagelberg's code coverage library
 + [[https://github.com/technomancy/robert-hooke][Robert Hooke]], Phil Hagelberg's instrumentation library

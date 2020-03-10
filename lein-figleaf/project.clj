@@ -1,4 +1,4 @@
-(defproject lein-figleaf "1.0.1-SNAPSHOT"
+(defproject lein-figleaf "1.0.1"
   :description "A plugin for figleaf, a code coverage library for Clojure"
-  :dependencies [;;[org.clojure/clojure "1.3.0"]
-		 [figleaf "1.0.1-SNAPSHOT"]])
+  :dependencies [[local/figleaf "1.0.1"]]
+  :repositories [["project" {:url "file://Users/john/.m2/repository" :username "" :password "" ::checksum :ignore}]])

@@ -21,37 +21,57 @@
 ;;
 (ns figleaf.core
   (:use [clojure.set :only [difference]])
-  (:require [clojure.test :as test]))
+  (:use [clojure.pprint :only [cl-format]])
+  (:require [clojure.test :as test])
+  (:require [clojure.spec.alpha :as s])
+  (:gen-class))
+
+(def ^:dynamic *figleaf-config* {
+                       :blacklist ["-main"]
+                       })
+
 
 (defn standard-fn? [func]
   "Evaluate func to decide if it represents a standard function, i.e. not
 a macro and not itself a test method."
-  (and (.isBound func) (fn? (deref func))
+  (and (bound? func) (fn? (deref func))
        (not (:macro (meta func))) (not (:test (meta func)))))
 
 (defn instrumented? [func]
   (not (nil? (:figleaf/original (meta func)))))
+
+(defn filter-namespace
+  "Filter the namespace by key of any function we don't want to tally."
+  ([ns names]
+   (let [hash-of-names (into #{} (if (list? names) names (vec names)))]
+     (into {} (filter #(not (contains? hash-of-names (.toString (first %)))) ns))))
+  ([ns]
+   (filter-namespace ns (:blacklist *figleaf-config*))))
+
+(defn- find-functions [namespace-under-test]
+  "Locate all public functions that are not blacklisted in the given namespace"
+  (filter standard-fn? (vals (filter-namespace (ns-publics namespace-under-test)))))
 
 (defn instrument-function [var-name pre post]
   "Wrap given func with pre- and post-function calls. Return a let-over-lambda
 expression to restore to original."
   (do
     (alter-var-root var-name
-		    (fn [function]
-		      (with-meta
-			(fn [& args]
-			  (if pre (pre (str var-name) args))
-			  (let [result (apply function args)]
-			    (if post (post (str var-name) args))
-			    result))
-			(assoc (meta function)
-			  :figleaf/original function))))
+                    (fn [function]
+                      (with-meta
+                        (fn [& args]
+                          (if pre (pre (str var-name) args))
+                          (let [result (apply function args)]
+                            (if post (post (str var-name) args))
+                            result))
+                        (assoc (meta function)
+                          :figleaf/original function))))
     #(alter-var-root var-name (fn [function] (:figleaf/original (meta function))))))
 
 (defn instrument-namespace [namespace-under-test pre post]
   "Instrument a namespace. Wrap in docall is necessary to make sure call methods are instrumented
 ahead of use."
-  (doall (map #(instrument-function %1 pre post) (filter standard-fn? (vals (ns-publics namespace-under-test))))))
+  (doall (map #(instrument-function %1 pre post) (find-functions namespace-under-test))))
 
 ;;
 ;; High-order function version of with-instrument-namespace.
@@ -65,10 +85,10 @@ ahead of use."
 calls. Call code specified in the body and restore the functions on exit.
 Use try-finally block to guarantee recovery even when an exception occurs."
   (let [restore-list (instrument-namespace ns pre post)
-	restore #(doseq [restore-fn restore-list]
-		   (restore-fn))]
+        restore #(doseq [restore-fn restore-list]
+                   (restore-fn))]
     (try (body)
-	 (finally (restore)))))
+         (finally (restore)))))
 
 (defmacro with-instrument-namespace [ns pre post & body]
   "Wrap each function of the given package with pre and post function
@@ -78,8 +98,8 @@ calls. Call code specified in the body and restore the functions on exit."
 (let [funcall-counter (atom {})
       target-ns (atom 'user)]
   (defn all []
-    (filter standard-fn? (vals (ns-publics @target-ns))))
-;;    (loop for name being the external-symbol of package when (fboundp name) collect name))
+    (map str (find-functions @target-ns)))
+  ;;    (loop for name being the external-symbol of package when (fboundp name) collect name))
   (defn tested []
     "Return a list of tested functions"
     (keys @funcall-counter))
@@ -92,8 +112,8 @@ calls. Call code specified in the body and restore the functions on exit."
     ([func-name _]
        (increment-funcall-count func-name))
     ([func-name]
-    (let [current-count (get @funcall-counter func-name 0)]
-      (swap! funcall-counter #(assoc % func-name (inc current-count))))))
+       (let [current-count (get @funcall-counter func-name 0)]
+         (swap! funcall-counter #(assoc % func-name (inc current-count))))))
   (defn funcall-count []
     "Return count of function calls."
     (reduce + (vals @funcall-counter)))
@@ -111,10 +131,34 @@ calls. Call code specified in the body and restore the functions on exit."
 unit-test-namespace. Code coverage results are appended to the output
 of the standard test results."
     `(do
-      (set-namespace '~namespace-under-test)
-      (reset-function-count)
-      (with-instrument-namespace ~namespace-under-test increment-funcall-count nil
-	(test/run-tests '~unit-test-namespace))
-      (printf "CODE COVERAGE: Functions %d, Tested %d, Ratio %2.0f%%\n" (namespace-function-count)
-	      (tested-function-count) (/ (tested-function-count) (namespace-function-count) 0.01))))
+       (set-namespace '~namespace-under-test)
+       (reset-function-count)
+       (with-instrument-namespace ~namespace-under-test increment-funcall-count nil
+         (test/run-tests '~unit-test-namespace))
+       (if (> (count (tested)) 0)
+         (cl-format true "FUNCTIONS TESTED: ~{~A~^, ~}~%" (tested)))
+       (if (> (count (untested)) 0)
+         (cl-format true "FUNCTIONS UNTESTED: ~{~A~^, ~}~%" (untested)))
+       (printf "CODE COVERAGE: Functions %d, Tested %d, Ratio %2.0f%%\n" (namespace-function-count)
+               (tested-function-count) (/ (tested-function-count) (namespace-function-count) 0.01))))
   )
+
+(defn- require-form [ns-under-test unit-test-ns]
+  `(try
+     (require 'figleaf.core)
+     (require '~ns-under-test)
+     (require '~unit-test-ns)
+     (catch Throwable e#
+       (.printStackTrace e#)
+       (System/exit 1))))
+
+(defn- run-form [ns-under-test unit-test-ns]
+  `(run-tests ~ns-under-test ~unit-test-ns))
+
+(defn -main [ns-under-test unit-test-ns]
+  "Run clojure.test and report code coverage. Takes two arguments,
+the namespace under test and the namespace of the corresponding unit tests."
+  (let [ns-under-test-as-symbol (symbol ns-under-test)
+	unit-test-ns-as-symbol (symbol unit-test-ns)]
+     (eval (require-form ns-under-test-as-symbol unit-test-ns-as-symbol))
+     (eval (run-form ns-under-test-as-symbol unit-test-ns-as-symbol))))

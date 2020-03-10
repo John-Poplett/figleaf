@@ -1,5 +1,5 @@
 (ns leiningen.figleaf
-  (:use [leiningen.compile :only [eval-in-project]]))
+  (:use [leiningen.core.eval :only [eval-in-project]]))
 
 (defn- require-form [ns-under-test unit-test-ns]
   `(try
