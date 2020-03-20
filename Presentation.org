@@ -90,7 +90,7 @@ user=> (sqr 5)
 user=> (alter-var-root
 	 (var sqr)                     ; var to alter
 	 (fn [f]                       ; fn to apply to the var's value
-	   #(do (println "Squaring" %) ; returns a new fn wrapping old fn
+	   (do (println "Squaring" %)  ; returns a new fn wrapping old fn
 		(f %))))
 user=> (sqr 5)
 Squaring 5
