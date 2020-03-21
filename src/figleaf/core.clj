@@ -1,4 +1,4 @@
-;; Copyright (c) 2010-2012 John H. Poplett.
+;; Copyright (c) 2010-2020 John H. Poplett.
 ;;
 ;; Permission is hereby granted, free of charge, to any person obtaining
 ;; a copy of this software and associated documentation files (the
@@ -29,7 +29,6 @@
 (def ^:dynamic *figleaf-config* {
                        :blacklist ["-main"]
                        })
-
 
 (defn standard-fn? [func]
   "Evaluate func to decide if it represents a standard function, i.e. not
@@ -97,7 +96,12 @@ calls. Call code specified in the body and restore the functions on exit."
 
 (let [funcall-counter (atom {})
       target-ns (atom 'user)]
+  (defn get-funcall-counter []
+    "Return a copy of the current funcall counter data. This is a good
+    way to take a snapshot of the coverage data after a test run."
+    @funcall-counter)
   (defn all []
+    "Return a list of all public functions in the target namespace."
     (map str (find-functions @target-ns)))
   ;;    (loop for name being the external-symbol of package when (fboundp name) collect name))
   (defn tested []
@@ -123,6 +127,7 @@ calls. Call code specified in the body and restore the functions on exit."
   (defn namespace-function-count []
     (count (all)))
   (defn reset-function-count []
+    "Reset function count values for subsequent runs."
     (swap! funcall-counter (fn [_] {})))
   (defn set-namespace [namespace-under-test]
     (swap! target-ns (fn [_] namespace-under-test)))

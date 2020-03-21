@@ -115,6 +115,12 @@ user=> (tested-function-count)
 user=> (/ (funcall-count) (count (all)) 1.0)
 72.5
 ```
+With version 1.02, you can fetch the raw content of the
+function counter with the `get-funcall-counter` function.
+```clojure
+user=> (get-funcall-counter)
+{"#'sentiment.core/confusion-matrix" 8, "#'sentiment.core/compute-valid-values" 1, "#'sentiment.core/build-AFFIN-map" 1, "#'sentiment.core/->Sample" 996, "#'sentiment.core/tokenize-text" 1, "#'sentiment.core/mean" 3, "#'sentiment.core/classification-report" 1, "#'sentiment.core/zip" 2, "#'sentiment.core/handle-sentiment-data" 1, "#'sentiment.core/process-sentiment-data" 1}
+```
 ## Benefits
 > Nothing measured, nothing gained.
   
